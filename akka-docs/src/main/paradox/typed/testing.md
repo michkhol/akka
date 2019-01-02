@@ -25,9 +25,9 @@ will be added.
 @@@ warning
 
 This module is currently marked as @ref:[may change](../common/may-change.md) in the sense
-  of being the subject of active research. This means that API or semantics can
+  of being the subject of final development. This means that API or semantics can
   change without warning or deprecation period and it is not recommended to use
-  this module in production just yet—you have been warned.
+  this module in production just yet.
 
 @@@
 
@@ -211,6 +211,8 @@ Scala
 Java
 :  @@snip [AsyncTestingExampleTest.java](/akka-actor-testkit-typed/src/test/java/jdocs/akka/actor/testkit/typed/javadsl/AsyncTestingExampleTest.java) { #test-stop-actors }
 
+The `stop` method can only be used for actors that were spawned by the same `ActorTestKit`. Other actors
+will not be stopped by that method.
 
 ### Test framework integration
 
