@@ -11,11 +11,25 @@ import akka.annotation.{ DoNotInherit, InternalApi }
  * transform, filter, send to a side channel etc. It is the core API for decoration of behaviors. Many built-in
  * intercepting behaviors are provided through factories in the respective `Behaviors`.
  *
+ * If the interceptor does keep mutable state care must be taken to create the instance in a `setup` block
+ * so that a new instance is created per spawned actor rather than shared among actor instance.
+ *
  * @tparam O The outer message type – the type of messages the intercepting behavior will accept
  * @tparam I The inner message type - the type of message the wrapped behavior accepts
  */
 abstract class BehaviorInterceptor[O, I] {
   import BehaviorInterceptor._
+
+  /**
+   * Allows for applying the interceptor only to certain message types. Useful if the official protocol and the actual
+   * protocol of an actor causes problems, for example class cast exceptions for a message not of type `O` that
+   * the actor still knows how to deal with. Note that this is only possible to use when `O` and `I` are the same type.
+   *
+   * @return A subtype of `O` that should be intercepted or `null` to intercept all `O`s.
+   *         Subtypes of `O` matching this are passed directly to the inner behavior without interception.
+   */
+  // null for all to avoid having to deal with class tag/explicit class in the default case of no filter
+  def interceptMessageType: Class[_ <: O] = null
 
   /**
    * Override to intercept actor startup. To trigger startup of

@@ -8,9 +8,10 @@ import akka.annotation.DoNotInherit
 
 /**
  * Envelope that is published on the eventStream for every message that is
- * dropped due to overfull queues.
+ * dropped due to overfull queues or routers with no routees.
  */
 final case class Dropped(msg: Any, recipient: ActorRef[Nothing]) {
+
   /** Java API */
   def getRecipient(): ActorRef[Void] = recipient.asInstanceOf[ActorRef[Void]]
 }
@@ -18,7 +19,9 @@ final case class Dropped(msg: Any, recipient: ActorRef[Nothing]) {
 /**
  * Exception that an actor fails with if it does not handle a Terminated message.
  */
-final case class DeathPactException(ref: ActorRef[Nothing]) extends RuntimeException(s"death pact with $ref was triggered") {
+final case class DeathPactException(ref: ActorRef[Nothing])
+    extends RuntimeException(s"death pact with $ref was triggered") {
+
   /** Java API */
   def getRef(): ActorRef[Void] = ref.asInstanceOf[ActorRef[Void]]
 }
@@ -34,8 +37,7 @@ trait Signal
 /**
  * Lifecycle signal that is fired upon restart of the Actor before replacing
  * the behavior with the fresh one (i.e. this signal is received within the
- * behavior that failed). The replacement behavior will receive PreStart as its
- * first signal.
+ * behavior that failed).
  */
 sealed abstract class PreRestart extends Signal
 case object PreRestart extends PreRestart {
@@ -78,8 +80,18 @@ object Terminated {
  */
 @DoNotInherit
 sealed class Terminated(val ref: ActorRef[Nothing]) extends Signal {
+
   /** Java API: The actor that was watched and got terminated */
   def getRef(): ActorRef[Void] = ref.asInstanceOf[ActorRef[Void]]
+
+  override def toString: String = s"Terminated($ref)"
+
+  override def hashCode(): Int = ref.hashCode()
+
+  override def equals(obj: Any): Boolean = obj match {
+    case Terminated(`ref`) => true
+    case _                 => false
+  }
 }
 
 object ChildFailed {
@@ -96,4 +108,13 @@ final class ChildFailed(ref: ActorRef[Nothing], val cause: Throwable) extends Te
    * Java API
    */
   def getCause(): Throwable = cause
+
+  override def toString: String = s"ChildFailed($ref,${cause.getClass.getName})"
+
+  override def hashCode(): Int = ref.hashCode()
+
+  override def equals(obj: Any): Boolean = obj match {
+    case ChildFailed(`ref`, `cause`) => true
+    case _                           => false
+  }
 }

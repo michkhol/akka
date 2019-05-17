@@ -10,6 +10,7 @@ import akka.actor.typed.ActorRef;
 import akka.actor.typed.Behavior;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.persistence.typed.PersistenceId;
+import akka.persistence.typed.RecoveryCompleted;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import org.junit.ClassRule;
@@ -18,11 +19,11 @@ import org.scalatest.junit.JUnitSuite;
 
 public class PrimitiveStateTest extends JUnitSuite {
 
-  private static final Config config = ConfigFactory.parseString(
-    "akka.persistence.journal.plugin = \"akka.persistence.journal.inmem\" \n");
+  private static final Config config =
+      ConfigFactory.parseString(
+          "akka.persistence.journal.plugin = \"akka.persistence.journal.inmem\" \n");
 
-  @ClassRule
-  public static final TestKitJunitResource testKit = new TestKitJunitResource(config);
+  @ClassRule public static final TestKitJunitResource testKit = new TestKitJunitResource(config);
 
   static class PrimitiveState extends EventSourcedBehavior<Integer, Integer, Integer> {
 
@@ -39,17 +40,21 @@ public class PrimitiveStateTest extends JUnitSuite {
     }
 
     @Override
-    public void onRecoveryCompleted(Integer n) {
-      probe.tell("onRecoveryCompleted:" + n);
+    public SignalHandler signalHandler() {
+      return newSignalHandlerBuilder()
+          .onSignal(
+              RecoveryCompleted.instance(),
+              state -> {
+                probe.tell("onRecoveryCompleted:" + state);
+              })
+          .build();
     }
 
     @Override
     public CommandHandler<Integer, Integer, Integer> commandHandler() {
       return (state, command) -> {
-        if (command < 0)
-          return Effect().stop();
-        else
-          return Effect().persist(command);
+        if (command < 0) return Effect().stop();
+        else return Effect().persist(command);
       };
     }
 
@@ -65,7 +70,8 @@ public class PrimitiveStateTest extends JUnitSuite {
   @Test
   public void handleIntegerState() throws Exception {
     TestProbe<String> probe = testKit.createTestProbe();
-    Behavior<Integer> b = Behaviors.setup(ctx -> new PrimitiveState(new PersistenceId("a"), probe.ref()));
+    Behavior<Integer> b =
+        Behaviors.setup(ctx -> new PrimitiveState(new PersistenceId("a"), probe.ref()));
     ActorRef<Integer> ref1 = testKit.spawn(b);
     probe.expectMessage("onRecoveryCompleted:0");
     ref1.tell(1);

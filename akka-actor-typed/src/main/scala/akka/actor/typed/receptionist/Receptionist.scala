@@ -4,14 +4,12 @@
 
 package akka.actor.typed.receptionist
 
-import akka.actor.typed.{ ActorRef, ActorSystem, Extension, ExtensionId }
+import akka.actor.typed.{ ActorRef, ActorSystem, Dispatchers, Extension, ExtensionId, ExtensionSetup, Props }
 import akka.actor.typed.internal.receptionist._
 import akka.annotation.DoNotInherit
+
 import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
-
-import akka.actor.typed.ExtensionSetup
-import akka.actor.typed.Props
 import akka.annotation.InternalApi
 
 /**
@@ -31,7 +29,7 @@ abstract class Receptionist extends Extension {
 
   private def hasCluster: Boolean = {
     // FIXME: replace with better indicator that cluster is enabled
-    val provider = system.settings.untyped.ProviderClass
+    val provider = system.settings.untypedSettings.ProviderClass
     provider == "akka.cluster.ClusterActorRefProvider"
   }
 
@@ -41,18 +39,25 @@ abstract class Receptionist extends Extension {
         system.dynamicAccess
           .getObjectFor[ReceptionistBehaviorProvider]("akka.cluster.typed.internal.receptionist.ClusterReceptionist")
           .recover {
-            case e ⇒
-              throw new RuntimeException("ClusterReceptionist could not be loaded dynamically. Make sure you have " +
-                "'akka-cluster-typed' in the classpath.", e)
-          }.get
+            case e =>
+              throw new RuntimeException(
+                "ClusterReceptionist could not be loaded dynamically. Make sure you have " +
+                "'akka-cluster-typed' in the classpath.",
+                e)
+          }
+          .get
       } else LocalReceptionist
 
     import akka.actor.typed.scaladsl.adapter._
-    system.internalSystemActorOf(provider.behavior, "receptionist", Props.empty)
+    system.internalSystemActorOf(
+      provider.behavior,
+      provider.name,
+      Props.empty.withDispatcherFromConfig(Dispatchers.InternalDispatcherId))
   }
 }
 
 object ServiceKey {
+
   /**
    * Scala API: Creates a service key. The given ID should uniquely define a service with a given protocol.
    */
@@ -76,7 +81,7 @@ object ServiceKey {
  * Not for user extension, see factories in companion object: [[ServiceKey#create]] and [[ServiceKey#apply]]
  */
 @DoNotInherit
-abstract class ServiceKey[T] extends AbstractServiceKey { key ⇒
+abstract class ServiceKey[T] extends AbstractServiceKey { key =>
   type Protocol = T
   def id: String
   def asServiceKey: ServiceKey[T] = this
@@ -135,16 +140,19 @@ object Receptionist extends ExtensionId[Receptionist] {
      */
     def apply[T](key: ServiceKey[T], service: ActorRef[T]): Command =
       new ReceptionistMessages.Register[T](key, service, None)
+
     /**
      * Create a Register with an actor that will get an ack that the service was registered
      */
     def apply[T](key: ServiceKey[T], service: ActorRef[T], replyTo: ActorRef[Registered]): Command =
       new ReceptionistMessages.Register[T](key, service, Some(replyTo))
   }
+
   /**
    * Java API: A Register message without Ack that the service was registered
    */
   def register[T](key: ServiceKey[T], service: ActorRef[T]): Command = Register(key, service)
+
   /**
    * Java API: A Register message with Ack that the service was registered
    */
@@ -165,14 +173,17 @@ object Receptionist extends ExtensionId[Receptionist] {
 
     /** Scala API */
     def key: ServiceKey[_]
+
     /** Java API */
     def getKey: ServiceKey[_] = key
+
     /**
      * Scala API
      *
      * Also, see [[ServiceKey.Listing]] for more convenient pattern matching
      */
     def serviceInstance[T](key: ServiceKey[T]): ActorRef[T]
+
     /** Java API */
     def getServiceInstance[T](key: ServiceKey[T]): ActorRef[T]
   }
@@ -181,6 +192,7 @@ object Receptionist extends ExtensionId[Receptionist] {
    * Sent by the receptionist, available here for easier testing
    */
   object Registered {
+
     /**
      * Scala API
      */
@@ -188,6 +200,7 @@ object Receptionist extends ExtensionId[Receptionist] {
       new ReceptionistMessages.Registered(key, serviceInstance)
 
   }
+
   /**
    * Java API: Sent by the receptionist, available here for easier testing
    */
@@ -202,6 +215,7 @@ object Receptionist extends ExtensionId[Receptionist] {
    * with the termination of the subscriber.
    */
   object Subscribe {
+
     /**
      * Scala API:
      */
@@ -224,6 +238,7 @@ object Receptionist extends ExtensionId[Receptionist] {
    * protocol at one point in time.
    */
   object Find {
+
     /** Scala API: */
     def apply[T](key: ServiceKey[T], replyTo: ActorRef[Listing]): Command =
       new ReceptionistMessages.Find(key, replyTo)
@@ -231,7 +246,7 @@ object Receptionist extends ExtensionId[Receptionist] {
     /**
      * Special factory to make using Find with ask easier
      */
-    def apply[T](key: ServiceKey[T]): ActorRef[Listing] ⇒ Command = ref ⇒ new ReceptionistMessages.Find(key, ref)
+    def apply[T](key: ServiceKey[T]): ActorRef[Listing] => Command = ref => new ReceptionistMessages.Find(key, ref)
   }
 
   /**
@@ -250,8 +265,10 @@ object Receptionist extends ExtensionId[Receptionist] {
    */
   @DoNotInherit
   trait Listing {
+
     /** Scala API */
     def key: ServiceKey[_]
+
     /** Java API */
     def getKey: ServiceKey[_] = key
 
@@ -273,6 +290,7 @@ object Receptionist extends ExtensionId[Receptionist] {
    * Sent by the receptionist, available here for easier testing
    */
   object Listing {
+
     /** Scala API: */
     def apply[T](key: ServiceKey[T], serviceInstances: Set[ActorRef[T]]): Listing =
       new ReceptionistMessages.Listing[T](key, serviceInstances)
@@ -288,7 +306,7 @@ object Receptionist extends ExtensionId[Receptionist] {
 }
 
 object ReceptionistSetup {
-  def apply[T <: Extension](createExtension: ActorSystem[_] ⇒ Receptionist): ReceptionistSetup =
+  def apply[T <: Extension](createExtension: ActorSystem[_] => Receptionist): ReceptionistSetup =
     new ReceptionistSetup(new java.util.function.Function[ActorSystem[_], Receptionist] {
       override def apply(sys: ActorSystem[_]): Receptionist = createExtension(sys)
     }) // TODO can be simplified when compiled only with Scala >= 2.12
@@ -301,4 +319,4 @@ object ReceptionistSetup {
  * for tests that need to replace extension with stub/mock implementations.
  */
 final class ReceptionistSetup(createExtension: java.util.function.Function[ActorSystem[_], Receptionist])
-  extends ExtensionSetup[Receptionist](Receptionist, createExtension)
+    extends ExtensionSetup[Receptionist](Receptionist, createExtension)

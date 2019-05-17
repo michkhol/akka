@@ -3,6 +3,7 @@
 @@@ index
 
 * [Persistence - coding style](persistence-style.md)
+* [Persistence - snapshotting](persistence-snapshot.md)
 
 @@@
 
@@ -22,12 +23,11 @@ Akka Persistence is a library for building event sourced actors. For background 
 see the @ref:[untyped Akka Persistence section](../persistence.md). This documentation shows how the typed API for persistence
 works and assumes you know what is meant by `Command`, `Event` and `State`.
 
-@@@ warning
+@@@ note
 
-This module is currently marked as @ref:[may change](../common/may-change.md) in the sense
-  of being the subject of final development. This means that API or semantics can
-  change without warning or deprecation period and it is not recommended to use
-  this module in production just yet.
+This module is ready to be used in production, but it is still marked as @ref:[may change](../common/may-change.md).
+This means that API or semantics can change without warning or deprecation period, but such changes will
+be collected and be performed in Akka 2.6.0 rather than in 2.5.x patch releases.
 
 @@@
 
@@ -81,54 +81,60 @@ are executed sequentially after successful execution of the persist statement (o
 
 When an event has been persisted successfully the new state is created by applying the event to the current state with the `eventHandler`.
 
-The event handler returns the new state, which must be immutable so you return a new instance of the state.
+The state is typically defined as an immutable class and then the event handler returns a new instance of the state.
+You may choose to use a mutable class for the state, and then the event handler may update the state instance and
+return the same instance. Both immutable and mutable state is supported.
+
 The same event handler is also used when the entity is started up to recover its state from the stored events.
 
-It is not recommended to perform side effects
-in the event handler, as those are also executed during recovery of an persistent actor
+The event handler should only update the state and never perform side effects, as those would also be
+executed during recovery of the persistent actor.
 
-## Basic example
+### Completing the example
+
+Let's fill in the details of the example.
 
 Command and event:
 
 Scala
-:  @@snip [PersistentActorCompileOnyTest.scala](/akka-persistence-typed/src/test/scala/akka/persistence/typed/scaladsl/PersistentActorCompileOnlyTest.scala) { #command }
+:  @@snip [BasicPersistentBehaviorCompileOnly.scala](/akka-persistence-typed/src/test/scala/docs/akka/persistence/typed/BasicPersistentBehaviorCompileOnly.scala) { #command }
 
 Java
-:  @@snip [PersistentActorCompileOnyTest.java](/akka-persistence-typed/src/test/java/akka/persistence/typed/javadsl/PersistentActorCompileOnlyTest.java) { #command }
+:  @@snip [BasicPersistentBehaviorTest.java](/akka-persistence-typed/src/test/java/jdocs/akka/persistence/typed/BasicPersistentBehaviorTest.java) { #command }
 
-State is a List containing all the events:
+State is a List containing the 5 latest items:
 
 Scala
-:  @@snip [PersistentActorCompileOnyTest.scala](/akka-persistence-typed/src/test/scala/akka/persistence/typed/scaladsl/PersistentActorCompileOnlyTest.scala) { #state }
+:  @@snip [BasicPersistentBehaviorCompileOnly.scala](/akka-persistence-typed/src/test/scala/docs/akka/persistence/typed/BasicPersistentBehaviorCompileOnly.scala) { #state }
 
 Java
-:  @@snip [PersistentActorCompileOnyTest.java](/akka-persistence-typed/src/test/java/akka/persistence/typed/javadsl/PersistentActorCompileOnlyTest.java) { #state }
+:  @@snip [BasicPersistentBehaviorTest.java](/akka-persistence-typed/src/test/java/jdocs/akka/persistence/typed/BasicPersistentBehaviorTest.java) { #state }
 
-The command handler persists the `Cmd` payload in an `Evt`@java[. In this simple example the command handler is defined using a lambda, for the more complicated example below a `CommandHandlerBuilder` is used]:
+The command handler persists the `Add` payload in an `Added` event:
 
 Scala
-:  @@snip [PersistentActorCompileOnyTest.scala](/akka-persistence-typed/src/test/scala/akka/persistence/typed/scaladsl/PersistentActorCompileOnlyTest.scala) { #command-handler }
+:  @@snip [BasicPersistentBehaviorCompileOnly.scala](/akka-persistence-typed/src/test/scala/docs/akka/persistence/typed/BasicPersistentBehaviorCompileOnly.scala) { #command-handler }
 
 Java
-:  @@snip [PersistentActorCompileOnyTest.java](/akka-persistence-typed/src/test/java/akka/persistence/typed/javadsl/PersistentActorCompileOnlyTest.java) { #command-handler }
+:  @@snip [BasicPersistentBehaviorTest.java](/akka-persistence-typed/src/test/java/jdocs/akka/persistence/typed/BasicPersistentBehaviorTest.java) { #command-handler }
 
-The event handler appends the event to the state. This is called after successfully
-persisting the event in the database @java[. As with the command handler the event handler is defined using a lambda, see below for a more complicated example using the `EventHandlerBuilder`]:
+The event handler appends the item to the state and keeps 5 items. This is called after successfully
+persisting the event in the database:
 
 Scala
-:  @@snip [PersistentActorCompileOnyTest.scala](/akka-persistence-typed/src/test/scala/akka/persistence/typed/scaladsl/PersistentActorCompileOnlyTest.scala) { #event-handler }
+:  @@snip [BasicPersistentBehaviorCompileOnly.scala](/akka-persistence-typed/src/test/scala/docs/akka/persistence/typed/BasicPersistentBehaviorCompileOnly.scala) { #event-handler }
 
 Java
-:  @@snip [PersistentActorCompileOnyTest.java](/akka-persistence-typed/src/test/java/akka/persistence/typed/javadsl/PersistentActorCompileOnlyTest.java) { #event-handler }
+:  @@snip [BasicPersistentBehaviorTest.java](/akka-persistence-typed/src/test/java/jdocs/akka/persistence/typed/BasicPersistentBehaviorTest.java) { #event-handler }
 
-These are used to create a `EventSourcedBehavior`:
+@scala[These are used to create a `EventSourcedBehavior`:]
+@java[These are defined in an `EventSourcedBehavior`:]
 
 Scala
-:  @@snip [PersistentActorCompileOnyTest.scala](/akka-persistence-typed/src/test/scala/akka/persistence/typed/scaladsl/PersistentActorCompileOnlyTest.scala) { #behavior }
+:  @@snip [BasicPersistentBehaviorCompileOnly.scala](/akka-persistence-typed/src/test/scala/docs/akka/persistence/typed/BasicPersistentBehaviorCompileOnly.scala) { #behavior }
 
 Java
-:  @@snip [PersistentActorCompileOnyTest.java](/akka-persistence-typed/src/test/java/akka/persistence/typed/javadsl/PersistentActorCompileOnlyTest.java) { #behavior }
+:  @@snip [BasicPersistentBehaviorTest.java](/akka-persistence-typed/src/test/java/jdocs/akka/persistence/typed/BasicPersistentBehaviorTest.java) { #behavior }
 
 ## Cluster Sharding and persistence
 
@@ -137,7 +143,7 @@ where resilience is important so that if a node crashes the persistent actors ar
 resume operations @ref:[Cluster Sharding](cluster-sharding.md) is an excellent fit to spread persistent actors over a
 cluster and address them by id.
 
-The `EventSourcedBehavior` can then be run as with any plain typed actor as described in [actors documentation](actors-typed.md),
+The `EventSourcedBehavior` can then be run as with any plain typed actor as described in @ref:[actors documentation](actors.md),
 but since Akka Persistence is based on the single-writer principle the persistent actors are typically used together
 with Cluster Sharding. For a particular `persistenceId` only one persistent actor instance should be active at one time.
 If multiple instances were to persist events at the same time, the events would be interleaved and might not be
@@ -150,10 +156,10 @@ If the persistent behavior needs to use the `ActorContext`, for example to spawn
 wrapping construction with `Behaviors.setup`:
 
 Scala
-:  @@snip [PersistentActorCompileOnyTest.scala](/akka-persistence-typed/src/test/scala/akka/persistence/typed/scaladsl/PersistentActorCompileOnlyTest.scala) { #actor-context }
+:  @@snip [BasicPersistentBehaviorCompileOnly.scala](/akka-persistence-typed/src/test/scala/docs/akka/persistence/typed/BasicPersistentBehaviorCompileOnly.scala) { #actor-context }
 
 Java
-:  @@snip [PersistentActorCompileOnyTest.java](/akka-persistence-typed/src/test/java/akka/persistence/typed/javadsl/PersistentActorCompileOnlyTest.java) { #actor-context }
+:  @@snip [BasicPersistentBehaviorTest.java](/akka-persistence-typed/src/test/java/jdocs/akka/persistence/typed/BasicPersistentBehaviorTest.java) { #actor-context }
 
 
 
@@ -194,36 +200,17 @@ Java
 :  @@snip [BlogPostExample.java](/akka-persistence-typed/src/test/java/jdocs/akka/persistence/typed/BlogPostExample.java) { #commands }
 
 @java[The commandler handler to process each command is decided by the state class (or state predicate) that is
-given to the `commandHandlerBuilder` and the match cases in the builders. Several builders can be composed with `orElse`:]
+given to the `forStateType` of the `CommandHandlerBuilder` and the match cases in the builders.]
 @scala[The command handler to process each command is decided by first looking at the state and then the command.
-It typically becomes two levels of pattern matching, first on the state and then on the command. Delegating to methods
-is a good practise because the one-line cases give a nice overview of the message dispatch.]
-
-@@@ div { .group-scala }
+It typically becomes two levels of pattern matching, first on the state and then on the command.]
+Delegating to methods is a good practice because the one-line cases give a nice overview of the message dispatch.
 
 Scala
 :  @@snip [BlogPostExample.scala](/akka-persistence-typed/src/test/scala/docs/akka/persistence/typed/BlogPostExample.scala) { #command-handler }
 
-@@@
-
-@@@ div { .group-java }
-
-TODO rewrite this example to be more like the Scala example
-
 Java
 :  @@snip [BlogPostExample.java](/akka-persistence-typed/src/test/java/jdocs/akka/persistence/typed/BlogPostExample.java) { #command-handler }
 
-The `CommandHandlerBuilder` for a post that hasn't been initialized with content:
-
-Java
-:  @@snip [BlogPostExample.java](/akka-persistence-typed/src/test/java/jdocs/akka/persistence/typed/BlogPostExample.java) { #initial-command-handler }
-
-And a different `CommandHandlerBuilder` for after the post content has been added:
-
-Java
-:  @@snip [BlogPostExample.java](/akka-persistence-typed/src/test/java/jdocs/akka/persistence/typed/BlogPostExample.java) { #post-added-command-handler }
-
-@@@
 
 The event handler:
 
@@ -253,21 +240,21 @@ Each command has a single `Effect` which can be:
 
 * Persist events
 * None: Accept the command but no effects
-* Unhandled: Don't handle this command 
+* Unhandled: Don't handle this command
+* Stash: the current command is placed in a buffer and can be unstashed and processed later
 
 Note that there is only one of these. It is not possible to both persist and say none/unhandled.
 These are created using @java[a factory that is returned via the `Effect()` method]
-@scala[the `Effect` factory] and once created
-additional `SideEffects` can be added.
+@scala[the `Effect` factory] and once created additional `SideEffects` can be added.
 
-Most of them time this will be done with the `thenRun` method on the `Effect` above. It is also possible
-factor out common `SideEffect`s. For example:
+Most of them time this will be done with the `thenRun` method on the `Effect` above. You can factor out
+common side effects into functions and reuse for several commands. For example:
 
 Scala
-:  @@snip [BasicPersistentBehaviorCompileOnly.scala](/akka-persistence-typed/src/test/scala/akka/persistence/typed/scaladsl/PersistentActorCompileOnlyTest.scala) { #commonChainedEffects }
+:  @@snip [PersistentActorCompileOnlyTest.scala](/akka-persistence-typed/src/test/scala/akka/persistence/typed/scaladsl/PersistentActorCompileOnlyTest.scala) { #commonChainedEffects }
 
 Java
-:  @@snip [BasicPersistentBehaviorCompileOnly.scala](/akka-persistence-typed/src/test/java/akka/persistence/typed/javadsl/PersistentActorCompileOnlyTest.java) { #commonChainedEffects }
+:  @@snip [PersistentActorCompileOnlyTest.java](/akka-persistence-typed/src/test/java/akka/persistence/typed/javadsl/PersistentActorCompileOnlyTest.java) { #commonChainedEffects }
 
 ### Side effects ordering and guarantees
 
@@ -305,30 +292,38 @@ there will be compilation errors if the returned effect isn't a `ReplyEffect`, w
 created with @scala[`Effect.reply`]@java[`Effects().reply`], @scala[`Effect.noReply`]@java[`Effects().noReply`],
 @scala[`Effect.thenReply`]@java[`Effects().thenReply`], or @scala[`Effect.thenNoReply`]@java[`Effects().thenNoReply`].
 
+Scala
+:  @@snip [AccountExampleWithEventHandlersInState.scala](/akka-persistence-typed/src/test/scala/docs/akka/persistence/typed/AccountExampleWithEventHandlersInState.scala) { #withEnforcedReplies }
+
+Java
+:  @@snip [AccountExampleWithNullState.java](/akka-persistence-typed/src/test/java/jdocs/akka/persistence/typed/AccountExampleWithEventHandlersInState.java) { #withEnforcedReplies }
+
+The commands must implement `ExpectingReply` to include the @scala[`ActorRef[ReplyMessageType]`]@java[`ActorRef<ReplyMessageType>`]
+in a standardized way.
+
+Scala
+:  @@snip [AccountExampleWithEventHandlersInState.scala](/akka-persistence-typed/src/test/scala/docs/akka/persistence/typed/AccountExampleWithEventHandlersInState.scala) { #reply-command }
+
+Java
+:  @@snip [AccountExampleWithNullState.java](/akka-persistence-typed/src/test/java/jdocs/akka/persistence/typed/AccountExampleWithEventHandlersInState.java) { #reply-command }
+
+The `ReplyEffect` is created with @scala[`Effect.reply`]@java[`Effects().reply`], @scala[`Effect.noReply`]@java[`Effects().noReply`],
+@scala[`Effect.thenReply`]@java[`Effects().thenReply`], or @scala[`Effect.thenNoReply`]@java[`Effects().thenNoReply`].
+
+@java[Note that command handlers are defined with `newCommandHandlerWithReplyBuilder` when using
+`EventSourcedBehaviorWithEnforcedReplies`], as opposed to newCommandHandlerBuilder when using `EventSourcedBehavior`.]
+
+Scala
+:  @@snip [AccountExampleWithEventHandlersInState.scala](/akka-persistence-typed/src/test/scala/docs/akka/persistence/typed/AccountExampleWithEventHandlersInState.scala) { #reply }
+
+Java
+:  @@snip [AccountExampleWithNullState.java](/akka-persistence-typed/src/test/java/jdocs/akka/persistence/typed/AccountExampleWithEventHandlersInState.java) { #reply }
+
 These effects will send the reply message even when @scala[`EventSourcedBehavior.withEnforcedReplies`]@java[`EventSourcedBehaviorWithEnforcedReplies`]
 is not used, but then there will be no compilation errors if the reply decision is left out.
 
 Note that the `noReply` is a way of making conscious decision that a reply shouldn't be sent for a specific
 command or the reply will be sent later, perhaps after some asynchronous interaction with other actors or services.
-
-Scala
-:  @@snip [AccountExampleWithEventHandlersInState.scala](/akka-persistence-typed/src/test/scala/docs/akka/persistence/typed/AccountExampleWithEventHandlersInState.scala) { #reply-command }
-
-TODO include corresponding example in Java
-
-When using the reply effect the commands must implement `ExpectingReply` to include the @scala[`ActorRef[ReplyMessageType]`]@java[`ActorRef<ReplyMessageType>`]
-in a standardized way.
-
-Scala
-:  @@snip [AccountExampleWithEventHandlersInState.scala](/akka-persistence-typed/src/test/scala/docs/akka/persistence/typed/AccountExampleWithEventHandlersInState.scala) { #reply }
-
-TODO include corresponding example in Java
-
-Scala
-:  @@snip [AccountExampleWithEventHandlersInState.scala](/akka-persistence-typed/src/test/scala/docs/akka/persistence/typed/AccountExampleWithEventHandlersInState.scala) { #withEnforcedReplies }
-
-TODO include corresponding example in Java
-
 
 ## Serialization
 
@@ -340,7 +335,7 @@ Strategies for that can be found in the @ref:[schema evolution](../persistence-s
 ## Recovery
 
 It is strongly discouraged to perform side effects in `applyEvent`,
-so side effects should be performed once recovery has completed @scala[in the `onRecoveryCompleted` callback.] @java[by overriding `onRecoveryCompleted`]
+so side effects should be performed once recovery has completed as a reaction to the `RecoveryCompleted` signal @scala[`receiveSignal` handler] @java[by overriding `receiveSignal`]
 
 Scala
 :  @@snip [BasicPersistentBehaviorCompileOnly.scala](/akka-persistence-typed/src/test/scala/docs/akka/persistence/typed/BasicPersistentBehaviorCompileOnly.scala) { #recovery }
@@ -348,8 +343,9 @@ Scala
 Java
 :  @@snip [BasicPersistentBehaviorTest.java](/akka-persistence-typed/src/test/java/jdocs/akka/persistence/typed/BasicPersistentBehaviorTest.java) { #recovery }
 
-The `onRecoveryCompleted` takes @scala[an `ActorContext` and] the current `State`,
-and doesn't return anything.
+The `RecoveryCompleted` contains the current `State`.
+
+@ref[Snapshots](persistence-snapshot.md) can be used for optimizing recovery times.
 
 ## Tagging
 
@@ -414,3 +410,45 @@ Journals can reject events. The difference from a failure is that the journal mu
 trying to persist it e.g. because of a serialization exception. If an event is rejected it definitely won't be in the journal. 
 This is signalled to a `EventSourcedBehavior` via a `EventRejectedException` and can be handled with a @ref[supervisor](fault-tolerance.md). 
 
+## Stash
+
+When persisting events with `persist` or `persistAll` it is guaranteed that the persistent actor will not receive
+further commands until after the events have been confirmed to be persisted and additional side effects have been run.
+Incoming messages are stashed automatically until the `persist` is completed.
+
+Commands are also stashed during recovery and will not interfere with replayed events. Commands will be received
+when recovery has been completed.
+
+The stashing described above is handled automatically, but there is also a possibility to stash commands when
+they are received to defer processing of them until later. One example could be waiting for some external condition
+or interaction to complete before processing additional commands. That is accomplished by returning a `stash` effect
+and later use `thenUnstashAll`.
+
+Let's use an example of a task manager to illustrate how the stashing effects can be used. It handles three commands;
+`StartTask`, `NextStep` and `EndTask`. Those commands are associated with a given `taskId` and the manager process
+one `taskId` at a time. A task is started when receiving `StartTask`, and continues when receiving `NextStep` commands
+until the final `EndTask` is received. Commands with another `taskId` than the one in progress are deferred by
+stashing them. When `EndTask` is processed a new task can start and the stashed commands are processed.
+
+Scala
+:  @@snip [StashingExample.scala](/akka-persistence-typed/src/test/scala/docs/akka/persistence/typed/StashingExample.scala) { #stashing }
+
+Java
+:  @@snip [StashingExample.java](/akka-persistence-typed/src/test/java/jdocs/akka/persistence/typed/StashingExample.java) { #stashing }
+
+You should be careful to not send more messages to a persistent actor than it can keep up with, otherwise the stash
+buffer will fill up and when reaching its maximum capacity the commands will be dropped. The capacity can be configured with:
+
+```
+akka.persistence.typed.stash-capacity = 10000
+```
+
+Note that the stashed commands are kept in an in-memory buffer, so in case of a crash they will not be
+processed.
+
+* Stashed commands are discarded if the actor (entity) is passivated or rebalanced by Cluster Sharding.
+* Stashed commands are discarded if the actor is restarted (or stopped) due to that an exception was thrown from processing a command or side effect after persisting.
+* Stashed commands are preserved and processed later in case of failure in storing events if an `onPersistFailure` backoff supervisor strategy is defined.
+
+It's allowed to stash messages while unstashing. Those newly added commands will not be processed by the
+`unstashAll` effect that was in progress and have to be unstashed by another `unstashAll`.

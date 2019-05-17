@@ -10,21 +10,20 @@ import akka.actor.typed.ActorRef;
 import akka.actor.typed.Behavior;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.persistence.typed.PersistenceId;
+import akka.persistence.typed.RecoveryCompleted;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.scalatest.junit.JUnitSuite;
 
-import java.util.Objects;
-
 public class NullEmptyStateTest extends JUnitSuite {
 
-  private static final Config config = ConfigFactory.parseString(
-    "akka.persistence.journal.plugin = \"akka.persistence.journal.inmem\" \n");
+  private static final Config config =
+      ConfigFactory.parseString(
+          "akka.persistence.journal.plugin = \"akka.persistence.journal.inmem\" \n");
 
-  @ClassRule
-  public static final TestKitJunitResource testKit = new TestKitJunitResource(config);
+  @ClassRule public static final TestKitJunitResource testKit = new TestKitJunitResource(config);
 
   static class NullEmptyState extends EventSourcedBehavior<String, String, String> {
 
@@ -41,23 +40,24 @@ public class NullEmptyStateTest extends JUnitSuite {
     }
 
     @Override
-    public void onRecoveryCompleted(String s) {
-      probe.tell("onRecoveryCompleted:" + s);
+    public SignalHandler signalHandler() {
+      return newSignalHandlerBuilder()
+          .onSignal(
+              RecoveryCompleted.instance(),
+              state -> {
+                probe.tell("onRecoveryCompleted:" + state);
+              })
+          .build();
     }
 
     @Override
     public CommandHandler<String, String, String> commandHandler() {
-      CommandHandlerBuilder<String, String, String, String> b1 =
-        commandHandlerBuilder(Objects::isNull)
-          .matchCommand("stop"::equals, command -> Effect().stop())
-          .matchCommand(String.class, this::persistCommand);
 
-      CommandHandlerBuilder<String, String, String, String> b2 =
-        commandHandlerBuilder(String.class)
-        .matchCommand("stop"::equals, command -> Effect().stop())
-        .matchCommand(String.class, this::persistCommand);
-
-      return b1.orElse(b2).build();
+      return newCommandHandlerBuilder()
+          .forAnyState()
+          .onCommand("stop"::equals, command -> Effect().stop())
+          .onCommand(String.class, this::persistCommand)
+          .build();
     }
 
     private Effect<String, String> persistCommand(String command) {
@@ -66,24 +66,21 @@ public class NullEmptyStateTest extends JUnitSuite {
 
     @Override
     public EventHandler<String, String> eventHandler() {
-      return eventHandlerBuilder()
-        .matchEvent(String.class, this::applyEvent)
-        .build();
+      return newEventHandlerBuilder().forAnyState().onEvent(String.class, this::applyEvent).build();
     }
 
     private String applyEvent(String state, String event) {
       probe.tell("eventHandler:" + state + ":" + event);
-      if (state == null)
-        return event;
-      else
-        return state + event;
+      if (state == null) return event;
+      else return state + event;
     }
   }
 
   @Test
   public void handleNullState() throws Exception {
     TestProbe<String> probe = testKit.createTestProbe();
-    Behavior<String> b = Behaviors.setup(ctx -> new NullEmptyState(new PersistenceId("a"), probe.ref()));
+    Behavior<String> b =
+        Behaviors.setup(ctx -> new NullEmptyState(new PersistenceId("a"), probe.ref()));
 
     ActorRef<String> ref1 = testKit.spawn(b);
     probe.expectMessage("onRecoveryCompleted:null");

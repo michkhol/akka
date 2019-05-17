@@ -19,13 +19,15 @@ object ClusterSingletonPoisonPillSpec {
 
   final case class GetSelf(replyTo: ActorRef[ActorRef[Any]])
   val sneakyBehavior: Behavior[GetSelf] = Behaviors.receive {
-    case (ctx, GetSelf(replyTo)) ⇒
+    case (ctx, GetSelf(replyTo)) =>
       replyTo ! ctx.self.unsafeUpcast[Any]
       Behaviors.same
   }
 }
 
-class ClusterSingletonPoisonPillSpec extends ScalaTestWithActorTestKit(ClusterSingletonApiSpec.config) with WordSpecLike {
+class ClusterSingletonPoisonPillSpec
+    extends ScalaTestWithActorTestKit(ClusterSingletonApiSpec.config)
+    with WordSpecLike {
 
   implicit val testSettings = TestKitSettings(system)
   val clusterNode1 = Cluster(system)
@@ -35,9 +37,10 @@ class ClusterSingletonPoisonPillSpec extends ScalaTestWithActorTestKit(ClusterSi
 
     "support using PoisonPill to stop" in {
       val probe = TestProbe[ActorRef[Any]]
-      val singleton = ClusterSingleton(system).init(SingletonActor(ClusterSingletonPoisonPillSpec.sneakyBehavior, "sneaky"))
+      val singleton =
+        ClusterSingleton(system).init(SingletonActor(ClusterSingletonPoisonPillSpec.sneakyBehavior, "sneaky"))
       singleton ! GetSelf(probe.ref)
-      val singletonRef = probe.expectMessageType[ActorRef[Any]]
+      val singletonRef = probe.receiveMessage()
       singletonRef ! PoisonPill
       probe.expectTerminated(singletonRef, 1.second)
     }

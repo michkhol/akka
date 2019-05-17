@@ -11,16 +11,29 @@ import akka.cluster.sharding.ShardRegion.HandOffStopper
 import akka.testkit.{ AkkaSpec, TestProbe }
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito._
-import org.scalatest.mockito.MockitoSugar
+import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.duration._
 
-class ClusterShardingInternalsSpec extends AkkaSpec(
-  """
+object ClusterShardingInternalsSpec {
+  case class HandOffStopMessage() extends NoSerializationVerificationNeeded
+  class EmptyHandlerActor extends Actor {
+    override def receive: Receive = {
+      case _ =>
+    }
+
+    override def postStop(): Unit = {
+      super.postStop()
+    }
+  }
+}
+
+class ClusterShardingInternalsSpec extends AkkaSpec("""
     |akka.actor.provider = cluster
-    |akka.remote.netty.tcp.port = 0
+    |akka.remote.classic.netty.tcp.port = 0
     |akka.remote.artery.canonical.port = 0
     |""".stripMargin) with MockitoSugar {
+  import ClusterShardingInternalsSpec._
 
   val clusterSharding = spy(new ClusterSharding(system.asInstanceOf[ExtendedActorSystem]))
 
@@ -50,23 +63,11 @@ class ClusterShardingInternalsSpec extends AkkaSpec(
     }
 
     "HandOffStopper must stop the entity even if the entity doesn't handle handOffStopMessage" in {
-      case class HandOffStopMessage() extends NoSerializationVerificationNeeded
-      class EmptyHandlerActor extends Actor {
-        override def receive: Receive = {
-          case _ ⇒
-        }
-
-        override def postStop(): Unit = {
-          super.postStop()
-        }
-      }
-
       val probe = TestProbe()
       val shardName = "test"
       val emptyHandlerActor = system.actorOf(Props(new EmptyHandlerActor))
       val handOffStopper = system.actorOf(
-        Props(new HandOffStopper(shardName, probe.ref, Set(emptyHandlerActor), HandOffStopMessage, 10.millis))
-      )
+        Props(new HandOffStopper(shardName, probe.ref, Set(emptyHandlerActor), HandOffStopMessage, 10.millis)))
 
       watch(emptyHandlerActor)
       expectTerminated(emptyHandlerActor, 1.seconds)

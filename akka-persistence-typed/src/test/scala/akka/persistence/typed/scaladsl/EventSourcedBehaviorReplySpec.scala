@@ -9,11 +9,10 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import akka.Done
 import akka.actor.testkit.typed.scaladsl._
-import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.ActorRef
-import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.ActorContext
+import akka.actor.typed.scaladsl.Behaviors
 import akka.persistence.typed.ExpectingReply
 import akka.persistence.typed.PersistenceId
 import com.typesafe.config.Config
@@ -21,10 +20,9 @@ import com.typesafe.config.ConfigFactory
 import org.scalatest.WordSpecLike
 
 object EventSourcedBehaviorReplySpec {
-  def conf: Config = ConfigFactory.parseString(
-    s"""
+  def conf: Config = ConfigFactory.parseString(s"""
     akka.loglevel = INFO
-    # akka.persistence.typed.log-stashing = INFO
+    # akka.persistence.typed.log-stashing = on
     akka.persistence.journal.leveldb.dir = "target/typed-persistence-${UUID.randomUUID().toString}"
     akka.persistence.journal.plugin = "akka.persistence.journal.leveldb"
     akka.persistence.snapshot-store.plugin = "akka.persistence.snapshot-store.local"
@@ -42,41 +40,42 @@ object EventSourcedBehaviorReplySpec {
 
   final case class State(value: Int, history: Vector[Int])
 
-  def counter(persistenceId: PersistenceId)(implicit system: ActorSystem[_]): Behavior[Command[_]] =
-    Behaviors.setup(ctx ⇒ counter(ctx, persistenceId))
+  def counter(persistenceId: PersistenceId): Behavior[Command[_]] =
+    Behaviors.setup(ctx => counter(ctx, persistenceId))
 
   def counter(
-    ctx:           ActorContext[Command[_]],
-    persistenceId: PersistenceId): EventSourcedBehavior[Command[_], Event, State] = {
+      ctx: ActorContext[Command[_]],
+      persistenceId: PersistenceId): EventSourcedBehavior[Command[_], Event, State] = {
     EventSourcedBehavior.withEnforcedReplies[Command[_], Event, State](
       persistenceId,
       emptyState = State(0, Vector.empty),
-      commandHandler = (state, cmd) ⇒ cmd match {
+      commandHandler = (state, command) =>
+        command match {
 
-        case cmd: IncrementWithConfirmation ⇒
-          Effect.persist(Incremented(1))
-            .thenReply(cmd)(_ ⇒ Done)
+          case cmd: IncrementWithConfirmation =>
+            Effect.persist(Incremented(1)).thenReply(cmd)(_ => Done)
 
-        case cmd: IncrementReplyLater ⇒
-          Effect.persist(Incremented(1))
-            .thenRun((_: State) ⇒ ctx.self ! ReplyNow(cmd.replyTo))
-            .thenNoReply()
+          case cmd: IncrementReplyLater =>
+            Effect.persist(Incremented(1)).thenRun((_: State) => ctx.self ! ReplyNow(cmd.replyTo)).thenNoReply()
 
-        case cmd: ReplyNow ⇒
-          Effect.reply(cmd)(Done)
+          case cmd: ReplyNow =>
+            Effect.reply(cmd)(Done)
 
-        case query: GetValue ⇒
-          Effect.reply(query)(state)
+          case query: GetValue =>
+            Effect.reply(query)(state)
 
-      },
-      eventHandler = (state, evt) ⇒ evt match {
-        case Incremented(delta) ⇒
-          State(state.value + delta, state.history :+ state.value)
-      })
+        },
+      eventHandler = (state, evt) =>
+        evt match {
+          case Incremented(delta) =>
+            State(state.value + delta, state.history :+ state.value)
+        })
   }
 }
 
-class EventSourcedBehaviorReplySpec extends ScalaTestWithActorTestKit(EventSourcedBehaviorSpec.conf) with WordSpecLike {
+class EventSourcedBehaviorReplySpec
+    extends ScalaTestWithActorTestKit(EventSourcedBehaviorReplySpec.conf)
+    with WordSpecLike {
 
   import EventSourcedBehaviorReplySpec._
 

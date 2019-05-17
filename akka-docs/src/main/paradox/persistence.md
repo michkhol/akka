@@ -50,10 +50,6 @@ provides tools to facilitate in building GDPR capable systems.
 
 @@@
 
-Akka persistence is inspired by and the official replacement of the [eventsourced](https://github.com/eligosource/eventsourced) library. It follows the same
-concepts and architecture of [eventsourced](https://github.com/eligosource/eventsourced) but significantly differs on API and implementation level. See also
-@ref:[migration-eventsourced-2.3](project/migration-guide-eventsourced-2.3.x.md)
-
 ## Architecture
 
  * @scala[`PersistentActor`]@java[`AbstractPersistentActor`]: Is a persistent, stateful actor. It is able to persist events to a journal and can react to
@@ -131,7 +127,7 @@ The easiest way to run this example yourself is to download the ready to run
 @scala[@extref[Akka Persistence Sample with Scala](ecs:akka-samples-persistence-scala)]
 @java[@extref[Akka Persistence Sample with Java](ecs:akka-samples-persistence-java)]
 together with the tutorial. It contains instructions on how to run the `PersistentActorExample`.
-The source code of this sample can be found in the @scala[@extref[Akka Samples Repository](samples:akka-sample-persistence-scala)]@java[@extref[Akka Samples Repository](samples:akka-sample-persistence-java)].
+The source code of this sample can be found in the @scala[@extref[Akka Samples Repository](samples:akka-samples-persistence-scala)]@java[@extref[Akka Samples Repository](samples:akka-samples-persistence-java)].
 
 @@@ note
 
@@ -466,6 +462,8 @@ Scala
 Java
 :  @@snip [LambdaPersistenceDocTest.java](/akka-docs/src/test/java/jdocs/persistence/LambdaPersistenceDocTest.java) { #backoff }
 
+See @ref:[Supervision strategies](general/supervision.md#supervision-strategies) for more details about actor supervision.
+
 If persistence of an event is rejected before it is stored, e.g. due to serialization error,
 `onPersistRejected` will be invoked (logging a warning by default), and the actor continues with
 next message.
@@ -649,7 +647,7 @@ where `metadata` is of type `SnapshotMetadata`:
 
 @@snip [SnapshotProtocol.scala](/akka-persistence/src/main/scala/akka/persistence/SnapshotProtocol.scala) { #snapshot-metadata }
 
-During recovery, the persistent actor is offered a previously saved snapshot via a `SnapshotOffer` message from
+During recovery, the persistent actor is offered the latest saved snapshot via a `SnapshotOffer` message from
 which it can initialize internal state.
 
 Scala
@@ -679,7 +677,7 @@ saved snapshot matches the specified `SnapshotSelectionCriteria` will replay all
 In order to use snapshots, a default snapshot-store (`akka.persistence.snapshot-store.plugin`) must be configured,
 or the @scala[`PersistentActor`]@java[persistent actor] can pick a snapshot store explicitly by overriding @scala[`def snapshotPluginId: String`]@java[`String snapshotPluginId()`].
 
-Since it is acceptable for some applications to not use any snapshotting, it is legal to not configure a snapshot store.
+Because some use cases may not benefit from or need snapshots, it is perfectly valid not to not configure a snapshot store.
 However, Akka will log a warning message when this situation is detected and then continue to operate until
 an actor tries to store a snapshot, at which point the operation will fail (by replying with an `SaveSnapshotFailure` for example).
 

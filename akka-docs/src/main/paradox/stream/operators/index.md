@@ -8,6 +8,7 @@ These built-in sources are available from @scala[`akka.stream.scaladsl.Source`] 
 | |Operator|Description|
 |--|--|--|
 |Source|<a name="actorref"></a>@ref[actorRef](Source/actorRef.md)|Materialize an `ActorRef`; sending messages to it will emit them on the stream.|
+|Source|<a name="assourcewithcontext"></a>@ref[asSourceWithContext](Source/asSourceWithContext.md)|Turns a Source into a SourceWithContext which can propagate a context per element along a stream.|
 |Source|<a name="assubscriber"></a>@ref[asSubscriber](Source/asSubscriber.md)|Integration with Reactive Streams, materializes into a `org.reactivestreams.Subscriber`.|
 |Source|<a name="combine"></a>@ref[combine](Source/combine.md)|Combine several sources, using a given strategy such as merge or concat, into one source.|
 |Source|<a name="cycle"></a>@ref[cycle](Source/cycle.md)|Stream iterator in cycled manner.|
@@ -63,6 +64,7 @@ These built-in sinks are available from @scala[`akka.stream.scaladsl.Sink`] @jav
 |Sink|<a name="queue"></a>@ref[queue](Sink/queue.md)|Materialize a `SinkQueue` that can be pulled to trigger demand through the sink.|
 |Sink|<a name="reduce"></a>@ref[reduce](Sink/reduce.md)|Apply a reduction function on the incoming elements and pass the result to the next invocation.|
 |Sink|<a name="seq"></a>@ref[seq](Sink/seq.md)|Collect values emitted from the stream into a collection.|
+|Sink|<a name="setup"></a>@ref[setup](Sink/setup.md)|Defer the creation of a `Sink` until materialization and access `ActorMaterializer` and `Attributes`|
 |Sink|<a name="takelast"></a>@ref[takeLast](Sink/takeLast.md)|Collect the last `n` values emitted from the stream into a collection.|
 
 ## Additional Sink and Source converters
@@ -81,7 +83,7 @@ For example, following snippet will fall with timeout exception:
 
 ```scala
 ...
-.toMat(StreamConverters.asInputStream().mapMaterializedValue { inputStream ⇒
+.toMat(StreamConverters.asInputStream().mapMaterializedValue { inputStream =>
         inputStream.read()  // this could block forever
         ...
 }).run()
@@ -123,6 +125,7 @@ depending on being backpressured by downstream or not.
 | |Operator|Description|
 |--|--|--|
 |Source/Flow|<a name="alsoto"></a>@ref[alsoTo](Source-or-Flow/alsoTo.md)|Attaches the given `Sink` to this `Flow`, meaning that elements that pass through this `Flow` will also be sent to the `Sink`.|
+|Flow|<a name="asflowwithcontext"></a>@ref[asFlowWithContext](Flow/asFlowWithContext.md)|Turns a Flow into a FlowWithContext which can propagate a context per element along a stream.|
 |Source/Flow|<a name="collect"></a>@ref[collect](Source-or-Flow/collect.md)|Apply a partial function to each incoming element, if the partial function is defined for a value the returned value is passed downstream.|
 |Source/Flow|<a name="collecttype"></a>@ref[collectType](Source-or-Flow/collectType.md)|Transform this stream by testing the type of each of the elements on which the element is an instance of the provided type as they pass through this processing step.|
 |Source/Flow|<a name="detach"></a>@ref[detach](Source-or-Flow/detach.md)|Detach upstream demand from downstream demand without detaching the stream rates.|
@@ -148,6 +151,7 @@ depending on being backpressured by downstream or not.
 |Source/Flow|<a name="reduce"></a>@ref[reduce](Source-or-Flow/reduce.md)|Start with first element and then apply the current and next value to the given function, when upstream complete the current value is emitted downstream.|
 |Source/Flow|<a name="scan"></a>@ref[scan](Source-or-Flow/scan.md)|Emit its current value, which starts at `zero`, and then apply the current and next value to the given function, emitting the next current value.|
 |Source/Flow|<a name="scanasync"></a>@ref[scanAsync](Source-or-Flow/scanAsync.md)|Just like `scan` but receives a function that results in a @scala[`Future`] @java[`CompletionStage`] to the next value.|
+|Source/Flow|<a name="setup"></a>@ref[setup](Source-or-Flow/setup.md)|Defer the creation of a `Source/Flow` until materialization and access `ActorMaterializer` and `Attributes`|
 |Source/Flow|<a name="sliding"></a>@ref[sliding](Source-or-Flow/sliding.md)|Provide a sliding window over the incoming stream and pass the windows as groups of elements downstream.|
 |Source/Flow|<a name="statefulmapconcat"></a>@ref[statefulMapConcat](Source-or-Flow/statefulMapConcat.md)|Transform each element into zero or more elements that are individually passed downstream.|
 |Source/Flow|<a name="take"></a>@ref[take](Source-or-Flow/take.md)|Pass `n` incoming elements downstream and then complete|
@@ -276,18 +280,20 @@ For more background see the @ref[Error Handling in Streams](../stream-error.md) 
 
 | |Operator|Description|
 |--|--|--|
-|RestartSource|<a name="onfailureswithbackoff"></a>@ref[onFailuresWithBackoff](RestartSource/onFailuresWithBackoff.md)|Wrap the given @unidoc[Source] with a @unidoc[Source] that will restart it when it fails using an exponential backoff.|
-|RestartFlow|<a name="onfailureswithbackoff"></a>@ref[onFailuresWithBackoff](RestartFlow/onFailuresWithBackoff.md)|Wrap the given @unidoc[Flow] with a @unidoc[Flow] that will restart it when it fails using an exponential backoff. Notice that this @unidoc[Flow] will not restart on completion of the wrapped flow.|
-|RestartSource|<a name="withbackoff"></a>@ref[withBackoff](RestartSource/withBackoff.md)|Wrap the given @unidoc[Source] with a @unidoc[Source] that will restart it when it fails or complete using an exponential backoff.|
-|RestartFlow|<a name="withbackoff"></a>@ref[withBackoff](RestartFlow/withBackoff.md)|Wrap the given @unidoc[Flow] with a @unidoc[Flow] that will restart it when it fails or complete using an exponential backoff.|
-|RestartSink|<a name="withbackoff"></a>@ref[withBackoff](RestartSink/withBackoff.md)|Wrap the given @unidoc[Sink] with a @unidoc[Sink] that will restart it when it fails or complete using an exponential backoff.|
+|RestartSource|<a name="onfailureswithbackoff"></a>@ref[onFailuresWithBackoff](RestartSource/onFailuresWithBackoff.md)|Wrap the given @apidoc[Source] with a @apidoc[Source] that will restart it when it fails using an exponential backoff.|
+|RestartFlow|<a name="onfailureswithbackoff"></a>@ref[onFailuresWithBackoff](RestartFlow/onFailuresWithBackoff.md)|Wrap the given @apidoc[Flow] with a @apidoc[Flow] that will restart it when it fails using an exponential backoff. Notice that this @apidoc[Flow] will not restart on completion of the wrapped flow.|
+|RestartSource|<a name="withbackoff"></a>@ref[withBackoff](RestartSource/withBackoff.md)|Wrap the given @apidoc[Source] with a @apidoc[Source] that will restart it when it fails or complete using an exponential backoff.|
+|RestartFlow|<a name="withbackoff"></a>@ref[withBackoff](RestartFlow/withBackoff.md)|Wrap the given @apidoc[Flow] with a @apidoc[Flow] that will restart it when it fails or complete using an exponential backoff.|
+|RestartSink|<a name="withbackoff"></a>@ref[withBackoff](RestartSink/withBackoff.md)|Wrap the given @apidoc[Sink] with a @apidoc[Sink] that will restart it when it fails or complete using an exponential backoff.|
 
 @@@ index
 
 * [combine](Source/combine.md)
+* [asSourceWithContext](Source/asSourceWithContext.md)
 * [fromPublisher](Source/fromPublisher.md)
 * [fromIterator](Source/fromIterator.md)
 * [cycle](Source/cycle.md)
+* [setup](Source-or-Flow/setup.md)
 * [fromFuture](Source/fromFuture.md)
 * [fromCompletionStage](Source/fromCompletionStage.md)
 * [fromFutureSource](Source/fromFutureSource.md)
@@ -383,10 +389,12 @@ For more background see the @ref[Error Handling in Streams](../stream-error.md) 
 * [monitor](Source-or-Flow/monitor.md)
 * [initialDelay](Source-or-Flow/initialDelay.md)
 * [log](Source-or-Flow/log.md)
+* [asFlowWithContext](Flow/asFlowWithContext.md)
 * [fromSinkAndSource](Flow/fromSinkAndSource.md)
 * [fromSinkAndSourceCoupled](Flow/fromSinkAndSourceCoupled.md)
 * [lazyInitAsync](Flow/lazyInitAsync.md)
 * [preMaterialize](Sink/preMaterialize.md)
+* [setup](Sink/setup.md)
 * [fromSubscriber](Sink/fromSubscriber.md)
 * [cancelled](Sink/cancelled.md)
 * [head](Sink/head.md)

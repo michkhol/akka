@@ -9,19 +9,21 @@ import scala.collection.immutable
 import akka.testkit.{ AkkaSpec, TestProbe }
 import akka.actor.ActorRef
 import akka.io.Inet.SocketOption
-import akka.testkit.SocketUtil._
+import akka.testkit.SocketUtil.temporaryServerAddress
 import Tcp._
 import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContexts
 
-trait TcpIntegrationSpecSupport { _: AkkaSpec ⇒
+trait TcpIntegrationSpecSupport { _: AkkaSpec =>
 
   class TestSetup(shouldBindServer: Boolean = true, runClientInExtraSystem: Boolean = true) {
     val clientSystem =
       if (runClientInExtraSystem) {
         val res = ActorSystem("TcpIntegrationSpec-client", system.settings.config)
         // terminate clientSystem after server system
-        system.whenTerminated.onComplete { _ ⇒ res.terminate() }(ExecutionContexts.sameThreadExecutionContext)
+        system.whenTerminated.onComplete { _ =>
+          res.terminate()
+        }(ExecutionContexts.sameThreadExecutionContext)
         res
       } else system
     val bindHandler = TestProbe()
@@ -56,10 +58,10 @@ trait TcpIntegrationSpecSupport { _: AkkaSpec ⇒
       }
 
     /** allow overriding socket options for server side channel */
-    def bindOptions: immutable.Traversable[SocketOption] = Nil
+    def bindOptions: immutable.Iterable[SocketOption] = Nil
 
     /** allow overriding socket options for client side channel */
-    def connectOptions: immutable.Traversable[SocketOption] = Nil
+    def connectOptions: immutable.Iterable[SocketOption] = Nil
   }
 
 }

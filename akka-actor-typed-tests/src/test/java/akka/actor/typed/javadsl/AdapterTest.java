@@ -5,6 +5,7 @@
 package akka.actor.typed.javadsl;
 
 import org.junit.ClassRule;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.scalatest.junit.JUnitSuite;
 
@@ -33,11 +34,13 @@ public class AdapterTest extends JUnitSuite {
     @Override
     public Receive createReceive() {
       return receiveBuilder()
-        .matchEquals("ping", s -> getSender().tell("pong", getSelf()))
-        .match(ThrowIt.class, t -> {
-          throw t;
-        })
-        .build();
+          .matchEquals("ping", s -> getSender().tell("pong", getSelf()))
+          .match(
+              ThrowIt.class,
+              t -> {
+                throw t;
+              })
+          .build();
     }
   }
 
@@ -52,9 +55,7 @@ public class AdapterTest extends JUnitSuite {
 
     static Behavior<String> create(akka.actor.ActorRef ref, akka.actor.ActorRef probe) {
       Typed1 logic = new Typed1(ref, probe);
-      return receive(
-          (context, message) -> logic.onMessage(context, message),
-          (context, sig) -> logic.onSignal(context, sig));
+      return receive(logic::onMessage, logic::onSignal);
     }
 
     Behavior<String> onMessage(ActorContext<String> context, String message) {
@@ -72,7 +73,8 @@ public class AdapterTest extends JUnitSuite {
       } else if (message.equals("watch")) {
         Adapter.watch(context, ref);
         return same();
-      } else if (message.equals("supervise-stop")) {
+      } else if (message.equals("supervise-restart")) {
+        // restart is the default, otherwise an intermediate is required
         akka.actor.ActorRef child = Adapter.actorOf(context, untyped1());
         Adapter.watch(context, child);
         child.tell(new ThrowIt3(), Adapter.toUntyped(context.getSelf()));
@@ -83,11 +85,11 @@ public class AdapterTest extends JUnitSuite {
         Adapter.watch(context, child);
         Adapter.stop(context, child);
         return same();
-      } else if (message.equals("stop-self")){
+      } else if (message.equals("stop-self")) {
         try {
           context.stop(context.getSelf());
-        } catch (Exception e){
-          probe.tell(e,akka.actor.ActorRef.noSender());
+        } catch (Exception e) {
+          probe.tell(e, akka.actor.ActorRef.noSender());
         }
         return same();
       } else {
@@ -106,6 +108,7 @@ public class AdapterTest extends JUnitSuite {
   }
 
   static interface Typed2Msg {};
+
   static final class Ping implements Typed2Msg {
     public final ActorRef<String> replyTo;
 
@@ -113,10 +116,15 @@ public class AdapterTest extends JUnitSuite {
       this.replyTo = replyTo;
     }
   }
+
   static final class StopIt implements Typed2Msg {}
-  static abstract class ThrowIt extends RuntimeException implements Typed2Msg {}
+
+  abstract static class ThrowIt extends RuntimeException implements Typed2Msg {}
+
   static class ThrowIt1 extends ThrowIt {}
+
   static class ThrowIt2 extends ThrowIt {}
+
   static class ThrowIt3 extends ThrowIt {}
 
   static akka.actor.Props untyped2(ActorRef<Ping> ref, akka.actor.ActorRef probe) {
@@ -137,31 +145,39 @@ public class AdapterTest extends JUnitSuite {
     @Override
     public Receive createReceive() {
       return receiveBuilder()
-        .matchEquals("send", s -> {
-          ActorRef<String> replyTo = Adapter.toTyped(getSelf());
-          ref.tell(new Ping(replyTo));
-        })
-        .matchEquals("pong", s -> probe.tell("ok", getSelf()))
-        .matchEquals("spawn", s -> {
-          ActorRef<Typed2Msg> child = Adapter.spawnAnonymous(getContext(), typed2());
-          child.tell(new Ping(Adapter.toTyped(getSelf())));
-        })
-        .matchEquals("actorOf-props", s -> {
-          // this is how Cluster Sharding can be used
-          akka.actor.ActorRef child = getContext().actorOf(typed2Props());
-          child.tell(new Ping(Adapter.toTyped(getSelf())), akka.actor.ActorRef.noSender());
-        })
-        .matchEquals("watch", s -> Adapter.watch(getContext(), ref))
-        .match(akka.actor.Terminated.class, t -> probe.tell("terminated", getSelf()))
-        .matchEquals("supervise-stop", s -> testSupervice(new ThrowIt1()))
-        .matchEquals("supervise-resume", s -> testSupervice(new ThrowIt2()))
-        .matchEquals("supervise-restart", s -> testSupervice(new ThrowIt3()))
-        .matchEquals("stop-child", s -> {
-          ActorRef<Typed2Msg> child = Adapter.spawnAnonymous(getContext(), typed2());
-          Adapter.watch(getContext(), child);
-          Adapter.stop(getContext(), child);
-        })
-        .build();
+          .matchEquals(
+              "send",
+              s -> {
+                ActorRef<String> replyTo = Adapter.toTyped(getSelf());
+                ref.tell(new Ping(replyTo));
+              })
+          .matchEquals("pong", s -> probe.tell("ok", getSelf()))
+          .matchEquals(
+              "spawn",
+              s -> {
+                ActorRef<Typed2Msg> child = Adapter.spawnAnonymous(getContext(), typed2());
+                child.tell(new Ping(Adapter.toTyped(getSelf())));
+              })
+          .matchEquals(
+              "actorOf-props",
+              s -> {
+                // this is how Cluster Sharding can be used
+                akka.actor.ActorRef child = getContext().actorOf(typed2Props());
+                child.tell(new Ping(Adapter.toTyped(getSelf())), akka.actor.ActorRef.noSender());
+              })
+          .matchEquals("watch", s -> Adapter.watch(getContext(), ref))
+          .match(akka.actor.Terminated.class, t -> probe.tell("terminated", getSelf()))
+          .matchEquals("supervise-stop", s -> testSupervice(new ThrowIt1()))
+          .matchEquals("supervise-resume", s -> testSupervice(new ThrowIt2()))
+          .matchEquals("supervise-restart", s -> testSupervice(new ThrowIt3()))
+          .matchEquals(
+              "stop-child",
+              s -> {
+                ActorRef<Typed2Msg> child = Adapter.spawnAnonymous(getContext(), typed2());
+                Adapter.watch(getContext(), child);
+                Adapter.stop(getContext(), child);
+              })
+          .build();
     }
 
     private void testSupervice(ThrowIt t) {
@@ -172,21 +188,28 @@ public class AdapterTest extends JUnitSuite {
     }
 
     private SupervisorStrategy strategy() {
-        return new akka.actor.OneForOneStrategy(false, akka.japi.pf.DeciderBuilder
-          .match(ThrowIt1.class, e -> {
-            probe.tell("thrown-stop", getSelf());
-            return SupervisorStrategy.stop();
-          })
-          .match(ThrowIt2.class, e -> {
-            probe.tell("thrown-resume", getSelf());
-            return SupervisorStrategy.resume();
-          })
-          .match(ThrowIt3.class, e -> {
-            probe.tell("thrown-restart", getSelf());
-            // TODO Restart will not really restart the behavior
-            return SupervisorStrategy.restart();
-          })
-          .build());
+      return new akka.actor.OneForOneStrategy(
+          false,
+          akka.japi.pf.DeciderBuilder.match(
+                  ThrowIt1.class,
+                  e -> {
+                    probe.tell("thrown-stop", getSelf());
+                    return SupervisorStrategy.stop();
+                  })
+              .match(
+                  ThrowIt2.class,
+                  e -> {
+                    probe.tell("thrown-resume", getSelf());
+                    return SupervisorStrategy.resume();
+                  })
+              .match(
+                  ThrowIt3.class,
+                  e -> {
+                    probe.tell("thrown-restart", getSelf());
+                    // TODO Restart will not really restart the behavior
+                    return SupervisorStrategy.restart();
+                  })
+              .build());
     }
 
     @Override
@@ -196,19 +219,20 @@ public class AdapterTest extends JUnitSuite {
   }
 
   static Behavior<Typed2Msg> typed2() {
-      return Behaviors.receive((context, message) -> {
-        if (message instanceof Ping) {
-          ActorRef<String> replyTo = ((Ping) message).replyTo;
-          replyTo.tell("pong");
-          return same();
-        } else if (message instanceof StopIt) {
-          return stopped();
-        } else if (message instanceof ThrowIt) {
-          throw (ThrowIt) message;
-        } else {
-          return unhandled();
-        }
-      });
+    return Behaviors.receive(
+        (context, message) -> {
+          if (message instanceof Ping) {
+            ActorRef<String> replyTo = ((Ping) message).replyTo;
+            replyTo.tell("pong");
+            return same();
+          } else if (message instanceof StopIt) {
+            return stopped();
+          } else if (message instanceof ThrowIt) {
+            throw (ThrowIt) message;
+          } else {
+            return unhandled();
+          }
+        });
   }
 
   static akka.actor.Props typed2Props() {
@@ -216,18 +240,17 @@ public class AdapterTest extends JUnitSuite {
   }
 
   @ClassRule
-  public static AkkaJUnitActorSystemResource actorSystemResource = new AkkaJUnitActorSystemResource("ActorSelectionTest",
-    AkkaSpec.testConf());
+  public static AkkaJUnitActorSystemResource actorSystemResource =
+      new AkkaJUnitActorSystemResource("ActorSelectionTest", AkkaSpec.testConf());
 
   private final ActorSystem system = actorSystemResource.getSystem();
-
-
 
   @Test
   public void shouldSendMessageFromTypedToUntyped() {
     TestKit probe = new TestKit(system);
     akka.actor.ActorRef untypedRef = system.actorOf(untyped1());
-    ActorRef<String> typedRef = Adapter.spawnAnonymous(system, Typed1.create(untypedRef, probe.getRef()));
+    ActorRef<String> typedRef =
+        Adapter.spawnAnonymous(system, Typed1.create(untypedRef, probe.getRef()));
     typedRef.tell("send");
     probe.expectMsg("ok");
   }
@@ -263,7 +286,8 @@ public class AdapterTest extends JUnitSuite {
   public void shouldActorOfUntypedChildFromTypedParent() {
     TestKit probe = new TestKit(system);
     akka.actor.ActorRef ignore = system.actorOf(akka.actor.Props.empty());
-    ActorRef<String> typedRef = Adapter.spawnAnonymous(system, Typed1.create(ignore, probe.getRef()));
+    ActorRef<String> typedRef =
+        Adapter.spawnAnonymous(system, Typed1.create(ignore, probe.getRef()));
     typedRef.tell("actorOf");
     probe.expectMsg("ok");
   }
@@ -283,45 +307,27 @@ public class AdapterTest extends JUnitSuite {
   public void shouldWatchUntypedFromTyped() {
     TestKit probe = new TestKit(system);
     akka.actor.ActorRef untypedRef = system.actorOf(untyped1());
-    ActorRef<String> typedRef = Adapter.spawnAnonymous(system, Typed1.create(untypedRef, probe.getRef()));
+    ActorRef<String> typedRef =
+        Adapter.spawnAnonymous(system, Typed1.create(untypedRef, probe.getRef()));
     typedRef.tell("watch");
-    untypedRef.tell(akka.actor.PoisonPill.getInstance() , akka.actor.ActorRef.noSender());
+    untypedRef.tell(akka.actor.PoisonPill.getInstance(), akka.actor.ActorRef.noSender());
     probe.expectMsg("terminated");
   }
 
   @Test
-  public void shouldSuperviseTypedChildFromUntypedParent() {
-    TestKit probe = new TestKit(system);
-    ActorRef<Ping> ignore = Adapter.spawnAnonymous(system, ignore());
-    akka.actor.ActorRef untypedRef = system.actorOf(untyped2(ignore, probe.getRef()));
-    untypedRef.tell("supervise-stop", akka.actor.ActorRef.noSender());
-    probe.expectMsg("thrown-stop");
-    // ping => ok should not get through here
-    probe.expectMsg("terminated");
-
-    untypedRef.tell("supervise-resume", akka.actor.ActorRef.noSender());
-    probe.expectMsg("thrown-resume");
-    probe.expectMsg("ok");
-
-    untypedRef.tell("supervise-restart", akka.actor.ActorRef.noSender());
-    probe.expectMsg("thrown-restart");
-    probe.expectMsg("ok");
-  }
-
-  @Test
-  public void shouldSuperviseUntypedChildFromTypedParent() {
+  public void shouldSuperviseUntypedChildAsRestartFromTypedParent() {
     TestKit probe = new TestKit(system);
     akka.actor.ActorRef ignore = system.actorOf(akka.actor.Props.empty());
-    ActorRef<String> typedRef = Adapter.spawnAnonymous(system, Typed1.create(ignore, probe.getRef()));
+    ActorRef<String> typedRef =
+        Adapter.spawnAnonymous(system, Typed1.create(ignore, probe.getRef()));
 
     int originalLogLevel = system.getEventStream().logLevel();
     try {
       // suppress the logging with stack trace
       system.getEventStream().setLogLevel(Integer.MIN_VALUE); // OFF
 
-      // only stop supervisorStrategy
-      typedRef.tell("supervise-stop");
-      probe.expectMsg("terminated");
+      typedRef.tell("supervise-restart");
+      probe.expectMsg("ok");
     } finally {
       system.getEventStream().setLogLevel(originalLogLevel);
     }
@@ -341,7 +347,8 @@ public class AdapterTest extends JUnitSuite {
   public void shouldStopUntypedChildFromTypedParent() {
     TestKit probe = new TestKit(system);
     akka.actor.ActorRef ignore = system.actorOf(akka.actor.Props.empty());
-    ActorRef<String> typedRef = Adapter.spawnAnonymous(system, Typed1.create(ignore, probe.getRef()));
+    ActorRef<String> typedRef =
+        Adapter.spawnAnonymous(system, Typed1.create(ignore, probe.getRef()));
     typedRef.tell("stop-child");
     probe.expectMsg("terminated");
   }
@@ -350,7 +357,8 @@ public class AdapterTest extends JUnitSuite {
   public void stopSelfWillCauseError() {
     TestKit probe = new TestKit(system);
     akka.actor.ActorRef ignore = system.actorOf(akka.actor.Props.empty());
-    ActorRef<String> typedRef = Adapter.spawnAnonymous(system, Typed1.create(ignore, probe.getRef()));
+    ActorRef<String> typedRef =
+        Adapter.spawnAnonymous(system, Typed1.create(ignore, probe.getRef()));
     typedRef.tell("stop-self");
     probe.expectMsgClass(IllegalArgumentException.class);
   }
