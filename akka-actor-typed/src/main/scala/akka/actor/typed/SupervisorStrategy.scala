@@ -130,6 +130,8 @@ object SupervisorStrategy {
     def loggingEnabled: Boolean
 
     def unlimitedRestarts(): Boolean = maxRestarts == -1
+
+    def userExceptionHandler: Throwable => Unit
   }
 
   /**
@@ -140,7 +142,8 @@ object SupervisorStrategy {
       withinTimeRange: FiniteDuration,
       loggingEnabled: Boolean = true,
       stopChildren: Boolean = true,
-      stashCapacity: Int = -1)
+      stashCapacity: Int = -1,
+      userExceptionHandler: Throwable => Unit = { _ => ()})
       extends RestartSupervisorStrategy
       with RestartOrBackoff {
 
@@ -159,6 +162,9 @@ object SupervisorStrategy {
     override def withLoggingEnabled(enabled: Boolean): RestartSupervisorStrategy =
       copy(loggingEnabled = enabled)
 
+    override def withExceptionHandler(h: Throwable => Unit): RestartSupervisorStrategy =
+      copy(userExceptionHandler = h)
+
   }
 
   /**
@@ -172,7 +178,8 @@ object SupervisorStrategy {
       loggingEnabled: Boolean = true,
       maxRestarts: Int = -1,
       stopChildren: Boolean = true,
-      stashCapacity: Int = -1)
+      stashCapacity: Int = -1,
+      userExceptionHandler: Throwable => Unit = { _ => ()})
       extends BackoffSupervisorStrategy
       with RestartOrBackoff {
 
@@ -195,6 +202,9 @@ object SupervisorStrategy {
 
     override def withLoggingEnabled(enabled: Boolean): BackoffSupervisorStrategy =
       copy(loggingEnabled = enabled)
+
+    override def withExceptionHandler(h: Throwable => Unit): BackoffSupervisorStrategy =
+      copy(userExceptionHandler = h)
   }
 }
 
@@ -255,6 +265,12 @@ sealed abstract class RestartSupervisorStrategy extends SupervisorStrategy {
 
   override def withLoggingEnabled(enabled: Boolean): RestartSupervisorStrategy
 
+  /**
+    * Allows a side effect for the exception thrown, resulting in the restart.
+    * @param h exception handler
+    */
+  def withExceptionHandler(h: Throwable => Unit): RestartSupervisorStrategy
+
 }
 
 sealed abstract class BackoffSupervisorStrategy extends SupervisorStrategy {
@@ -301,4 +317,9 @@ sealed abstract class BackoffSupervisorStrategy extends SupervisorStrategy {
 
   override def withLoggingEnabled(enabled: Boolean): BackoffSupervisorStrategy
 
+  /**
+    * Allows a side effect for the exception thrown, resulting in the restart.
+    * @param h exception handler
+    */
+  def withExceptionHandler(h: Throwable => Unit): BackoffSupervisorStrategy
 }

@@ -37,6 +37,7 @@ object SupervisionSpec {
   final case class State(n: Int, children: Map[String, ActorRef[Command]]) extends Event
   case object Started extends Event
   case object StartFailed extends Event
+  case class UserEvent(e: Throwable) extends Event
 
   class Exc1(message: String = "exc-1") extends RuntimeException(message) with NoStackTrace
   class Exc2 extends Exc1("exc-2")
@@ -128,6 +129,23 @@ class StubbedSupervisionSpec extends WordSpec with Matchers {
 
       testkit.run(Throw(new Exc2))
       inbox.receiveMessage() should ===(ReceivedSignal(PreRestart))
+      testkit.run(GetState)
+      inbox.receiveMessage() should ===(State(0, Map.empty))
+    }
+
+    "restart when handled exception with user handler" in {
+      val inbox = TestInbox[Event]("evt")
+      val strategy = SupervisorStrategy.restart.withExceptionHandler(e => inbox.ref ! UserEvent(e))
+      val behv = supervise(targetBehavior(inbox.ref)).onFailure[Exc1](strategy)
+      val testkit = BehaviorTestKit(behv)
+      testkit.run(IncrementState)
+      testkit.run(GetState)
+      inbox.receiveMessage() should ===(State(1, Map.empty))
+
+      val ex = new Exc2
+      testkit.run(Throw(ex))
+      inbox.receiveMessage() should ===(ReceivedSignal(PreRestart))
+      inbox.receiveMessage() should ===(UserEvent(ex))
       testkit.run(GetState)
       inbox.receiveMessage() should ===(State(0, Map.empty))
     }

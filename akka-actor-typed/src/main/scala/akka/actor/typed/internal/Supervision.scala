@@ -316,6 +316,10 @@ private class RestartSupervisor[O, T, Thr <: Throwable: ClassTag](initial: Behav
 
   private def prepareRestart(ctx: TypedActorContext[O], reason: Throwable): Behavior[T] = {
     log(ctx, reason)
+    try strategy.userExceptionHandler(reason)
+    catch {
+      case NonFatal(ex) => ctx.asScala.log.error(ex, "failure in user exception handler")
+    }
 
     val currentRestartCount = restartCount
     updateRestartCount()
