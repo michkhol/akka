@@ -109,14 +109,14 @@ object ShardCoordinator {
         shardId: ShardId,
         currentShardAllocations: Map[ActorRef, immutable.IndexedSeq[ShardId]]): Future[ActorRef] = {
 
-      import scala.collection.JavaConverters._
+      import akka.util.ccompat.JavaConverters._
       allocateShard(requester, shardId, currentShardAllocations.asJava)
     }
 
     override final def rebalance(
         currentShardAllocations: Map[ActorRef, immutable.IndexedSeq[ShardId]],
         rebalanceInProgress: Set[ShardId]): Future[Set[ShardId]] = {
-      import scala.collection.JavaConverters._
+      import akka.util.ccompat.JavaConverters._
       implicit val ec = ExecutionContexts.sameThreadExecutionContext
       rebalance(currentShardAllocations.asJava, rebalanceInProgress.asJava).map(_.asScala.toSet)
     }
@@ -1104,7 +1104,7 @@ class DDataShardCoordinator(
       stateInitialized()
       activate()
 
-    case g: GetShardHome ⇒
+    case g: GetShardHome =>
       stashGetShardHomeRequest(sender(), g)
 
     case _ => stash()
@@ -1171,12 +1171,18 @@ class DDataShardCoordinator(
     unstashAll()
   }
 
-  private def stashGetShardHomeRequest(sender: ActorRef, request: GetShardHome): Unit =
+  private def stashGetShardHomeRequest(sender: ActorRef, request: GetShardHome): Unit = {
+    log.debug(
+      "GetShardHome [{}] request from [{}] stashed, because waiting for initial state or update of state. " +
+      "It will be handled afterwards.",
+      request.shard,
+      sender)
     getShardHomeRequests += (sender -> request)
+  }
 
   private def unstashGetShardHomeRequests(): Unit = {
     getShardHomeRequests.foreach {
-      case (originalSender, request) ⇒ self.tell(request, sender = originalSender)
+      case (originalSender, request) => self.tell(request, sender = originalSender)
     }
     getShardHomeRequests = Set.empty
   }
